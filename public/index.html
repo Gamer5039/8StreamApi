@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>8Stream API Interface</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            margin-top: 20px;
+        }
+        .language-btn {
+            margin: 5px;
+            padding: 10px;
+            cursor: pointer;
+        }
+        #videoContainer {
+            margin-top: 20px;
+            width: 100%;
+        }
+        video {
+            width: 100%;
+            max-height: 500px;
+        }
+        .hidden {
+            display: none;
+        }
+        /* Add this to existing styles */
+        .button-container {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        .download-btn {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>8Stream API Interface</h1>
+    <div>
+        <input type="text" id="imdbId" placeholder="Enter IMDB ID (e.g., tt6791350)">
+        <button onclick="getMediaInfo()">Get Media Info</button>
+    </div>
+
+    <div class="container" id="languageButtons"></div>
+    <div id="videoContainer" class="hidden">
+        <video id="video" controls></video>
+        <div class="button-container">
+            <button id="downloadBtn" class="download-btn" onclick="downloadVideo()">Download Video</button>
+        </div>
+    </div>
+
+    <script>
+        // Add these variables at the top with other declarations
+        let currentStreamUrl = '';
+        let currentKey = '';
+        const video = document.getElementById('video');
+        let hls = new Hls();
+
+        async function getMediaInfo() {
+            const imdbId = document.getElementById('imdbId').value;
+            try {
+                const response = await fetch(`http://localhost:3000/mediaInfo?id=${imdbId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentKey = data.data.key;
+                    displayLanguageButtons(data.data.playlist);
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error fetching media info');
+            }
+        }
+
+        function displayLanguageButtons(playlist) {
+            const container = document.getElementById('languageButtons');
+            container.innerHTML = '<h3>Select Language:</h3>';
+            
+            playlist.forEach(item => {
+                const button = document.createElement('button');
+                button.className = 'language-btn';
+                button.textContent = item.title;
+                button.onclick = () => getStream(item.file);
+                container.appendChild(button);
+            });
+        }
+
+        async function getStream(file) {
+            try {
+                const response = await fetch('http://localhost:3000/getStream', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        file: file,
+                        key: currentKey
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    playVideo(data.data.link);
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error getting stream URL');
+            }
+        }
+
+        function playVideo(url) {
+            currentStreamUrl = url;  // Store the current stream URL
+            const videoContainer = document.getElementById('videoContainer');
+            videoContainer.classList.remove('hidden');
+
+            if (Hls.isSupported()) {
+                hls.loadSource(url);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    video.play();
+                });
+            }
+            // For browsers that natively support HLS
+            else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = url;
+                video.addEventListener('loadedmetadata', function() {
+                    video.play();
+                });
+            }
+        }
+
+        // Add this new function
+        async function downloadVideo() {
+            if (!currentStreamUrl) return;
+            
+            try {
+                const response = await fetch(currentStreamUrl);
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'video.m3u8';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } catch (error) {
+                alert('Error downloading video');
+            }
+        }
+    </script>
+</body>
+</html>
