@@ -71,18 +71,27 @@
 
         async function getMediaInfo() {
             const imdbId = document.getElementById('imdbId').value;
+            if (!imdbId) {
+                alert('Please enter an IMDB ID');
+                return;
+            }
+            
             try {
                 const response = await fetch(`http://localhost:3000/mediaInfo?id=${imdbId}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
                 const data = await response.json();
                 
                 if (data.success) {
                     currentKey = data.data.key;
                     displayLanguageButtons(data.data.playlist);
                 } else {
-                    alert('Error: ' + data.message);
+                    alert('Error: ' + (data.message || 'Failed to fetch media info'));
                 }
             } catch (error) {
-                alert('Error fetching media info');
+                console.error('Error:', error);
+                alert('Error fetching media info. Please check if the IMDB ID is correct and try again.');
             }
         }
 
